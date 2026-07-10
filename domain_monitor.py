@@ -78,7 +78,7 @@ def parse_domains(html):
 
 # ---------- 筛选、排序、取前5 ----------
 def filter_top5(domains):
-    filtered = [d for d in domains if d['length'] < 10 and d['remain_days'] > 3000]
+    filtered = [d for d in domains if d['length'] < 20 and d['remain_days'] > 3000]
     sorted_list = sorted(filtered, key=lambda x: x['price'])
     return sorted_list[:5]
 
@@ -86,7 +86,7 @@ def filter_top5(domains):
 def send_notification(results):
     if not results:
         title = "【域名监控】今日无符合条件的域名"
-        desp = "第一页中未找到到期>3000天且长度<10的域名。"
+        desp = "第一页中未找到到期>3000天且长度<20的域名。"
     else:
         title = "【域名监控】符合条件的 Top5 域名推荐"
         lines = ["域名\t长度\t到期时间\t价格(元)"]
