@@ -24,4 +24,5 @@ jobs:
         env:
           COOKIE: ${{ secrets.COOKIE }}
           SENDKEY: ${{ secrets.SENDKEY }}
+          API_TOKEN: ${{ secrets.API_TOKEN }}
         run: python domain_monitor.py
