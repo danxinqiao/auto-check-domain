@@ -6,10 +6,9 @@ import cloudscraper
 
 # ---------- 数据抓取配置 ----------
 BASE_URL = "https://www.juyu.com/ykj/get_list"
-COOKIE = os.getenv('COOKIE')
 
+# 通用请求头（不再需要 cookie，由 session 自动管理）
 HEADERS = {
-    'cookie': COOKIE,
     'origin': 'https://www.juyu.com',
     'referer': 'https://www.juyu.com/ykj/',
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36',
@@ -23,20 +22,28 @@ DATA = {
     'jgpx': '3',
 }
 
+# ---------- 微信推送配置 ----------
 PUSH_URL = "https://wxpush.gyegt614.top/domain-check"
 SENDKEY = os.getenv('SENDKEY')
 API_TOKEN = os.getenv('API_TOKEN')
 
+# ---------- 获取第一页数据（自动获取 Cookie） ----------
 def fetch_first_page():
-    if not COOKIE:
-        raise Exception("环境变量 COOKIE 未设置")
-    resp = requests.post(BASE_URL, headers=HEADERS, data=DATA, timeout=30)
+    session = requests.Session()
+    session.headers.update(HEADERS)
+
+    # 先访问列表主页，获取服务器下发的初始 Cookie
+    session.get('https://www.juyu.com/ykj/', timeout=30)
+
+    # 再请求实际数据接口
+    resp = session.post(BASE_URL, data=DATA, timeout=30)
     resp.raise_for_status()
     result = resp.json()
     if result.get('code') != 1:
         raise Exception(f"请求失败: {result.get('msg')}")
     return result['html']
 
+# ---------- 解析 HTML ----------
 def parse_domains(html):
     soup = BeautifulSoup(html, 'html.parser')
     rows = soup.select('tbody tr')
@@ -74,11 +81,13 @@ def parse_domains(html):
         })
     return domains
 
+# ---------- 筛选、排序、取前5 ----------
 def filter_top5(domains):
     filtered = [d for d in domains if d['length'] < 20 and d['remain_days'] > 3000]
     sorted_list = sorted(filtered, key=lambda x: x['price'])
     return sorted_list[:5]
 
+# ---------- 通过微信推送接口发送 ----------
 def send_notification(results):
     if not API_TOKEN:
         raise Exception("环境变量 API_TOKEN 未设置")
@@ -114,6 +123,7 @@ def send_notification(results):
     resp.raise_for_status()
     print("推送成功")
 
+# ---------- 主流程 ----------
 def main():
     print("正在获取第一页数据...")
     html = fetch_first_page()
