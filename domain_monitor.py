@@ -3,11 +3,11 @@ import requests
 from bs4 import BeautifulSoup
 import os
 
-# ---------- 请求配置 ----------
-BASE_URL = "https://www.juyu.com/ykj/get_list"
+# ---------- 数据抓取配置 ----------
+BASE_URL = "https://www.juyu.com/ykj/get_list"  # 仍从原站获取域名列表
 
 # 从环境变量读取 Cookie（由 GitHub Secrets 注入）
-COOKIE = os.getenv('COOKIE')  # 必须设置
+COOKIE = os.getenv('COOKIE')
 
 HEADERS = {
     'cookie': COOKIE,
@@ -24,8 +24,9 @@ DATA = {
     'jgpx': '3',
 }
 
-# ---------- Server酱 配置（从环境变量读取） ----------
-SENDKEY = os.getenv('SENDKEY')  # 你的 Server酱 SendKey
+# ---------- 微信推送配置 ----------
+PUSH_URL = "https://wxpush.gyegt614.top/domain-check"  # 新推送地址
+SENDKEY = os.getenv('SENDKEY')          # 作为 openid 使用
 
 # ---------- 获取第一页数据 ----------
 def fetch_first_page():
@@ -82,21 +83,24 @@ def filter_top5(domains):
     sorted_list = sorted(filtered, key=lambda x: x['price'])
     return sorted_list[:5]
 
-# ---------- 通过 Server酱 推送 ----------
+# ---------- 通过微信推送接口发送 ----------
 def send_notification(results):
-    if not results:
-        title = "【域名监控】今日无符合条件的域名"
-        desp = "第一页中未找到到期>3000天且长度<20的域名。"
-    else:
-        title = "【域名监控】符合条件的 Top5 域名推荐"
-        lines = ["域名\t长度\t到期时间\t价格(元)"]
-        for d in results:
-            lines.append(f"{d['name']}\t{d['length']}\t{d['expire_date']}\t{d['price']}")
-        desp = "\n".join(lines)
-    
-    url = f"https://sctapi.ftqq.com/{SENDKEY}.send"
-    params = {'title': title, 'desp': desp}
-    resp = requests.get(url, params=params, timeout=30)
+    data_list = []
+    for d in results:
+        data_list.append({
+            "domain": d['name'],
+            "length": d['length'],
+            "expire": d['expire_date'],
+            "price": d['price']
+        })
+
+    payload = {
+        "openid": SENDKEY,
+        "title": "域名到期提醒",
+        "data": data_list
+    }
+
+    resp = requests.post(PUSH_URL, json=payload, timeout=30)
     resp.raise_for_status()
     result = resp.json()
     print(f"推送结果: {result}")
