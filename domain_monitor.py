@@ -106,7 +106,7 @@ def send_notification(results):
 
     # 添加 Authorization 头（Bearer 方式，若接口要求无前缀可删除 'Bearer '）
     push_headers = {
-        'Authorization': f'{API_TOKEN}'
+        'Authorization': API_TOKEN
     }
 
     resp = requests.post(PUSH_URL, json=payload, headers=push_headers, timeout=30)
