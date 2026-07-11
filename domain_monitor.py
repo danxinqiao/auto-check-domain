@@ -88,6 +88,12 @@ def filter_top5(domains):
 def send_notification(results):
     if not API_TOKEN:
         raise Exception("环境变量 API_TOKEN 未设置，请在 GitHub Secrets 中配置")
+    if not SENDKEY:
+        raise Exception("环境变量 SENDKEY 未设置，请在 GitHub Secrets 中配置")
+
+    # 调试：打印 token 和 openid 的部分信息（安全，不泄露完整值）
+    print(f"API_TOKEN 前5位: {API_TOKEN[:5]}... (长度: {len(API_TOKEN)})")
+    print(f"SENDKEY 前5位: {SENDKEY[:5]}... (长度: {len(SENDKEY)})")
 
     data_list = []
     for d in results:
@@ -104,15 +110,26 @@ def send_notification(results):
         "data": data_list
     }
 
-    # 添加 Authorization 头（Bearer 方式，若接口要求无前缀可删除 'Bearer '）
+    # 与测试成功时完全一致的 headers
     push_headers = {
-        'Authorization': API_TOKEN
+        "Authorization": API_TOKEN,
+        "Content-Type": "application/json"
     }
 
-    resp = requests.post(PUSH_URL, json=payload, headers=push_headers, timeout=30)
-    resp.raise_for_status()
-    result = resp.json()
-    print(f"推送结果: {result}")
+    print(f"推送 URL: {PUSH_URL}")
+    print(f"推送 payload: {payload}")
+
+    try:
+        resp = requests.post(PUSH_URL, headers=push_headers, json=payload, timeout=30)
+        print(f"响应状态码: {resp.status_code}")
+        print(f"响应内容: {resp.text}")
+        resp.raise_for_status()
+        result = resp.json()
+        print(f"推送成功: {result}")
+    except requests.exceptions.HTTPError as e:
+        print(f"推送失败，HTTP 错误: {e}")
+        print(f"服务器返回: {e.response.text}")
+        raise
 
 # ---------- 主流程 ----------
 def main():
