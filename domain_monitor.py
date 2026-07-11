@@ -2,11 +2,10 @@ import re
 import requests
 from bs4 import BeautifulSoup
 import os
+import cloudscraper
 
 # ---------- 数据抓取配置 ----------
 BASE_URL = "https://www.juyu.com/ykj/get_list"
-
-# 从环境变量读取 Cookie（由 GitHub Secrets 注入）
 COOKIE = os.getenv('COOKIE')
 
 HEADERS = {
@@ -24,15 +23,13 @@ DATA = {
     'jgpx': '3',
 }
 
-# ---------- 微信推送配置 ----------
 PUSH_URL = "https://wxpush.gyegt614.top/domain-check"
-SENDKEY = os.getenv('SENDKEY')          # 作为 openid 使用
-API_TOKEN = os.getenv('API_TOKEN')      # 用于 Authorization 头
+SENDKEY = os.getenv('SENDKEY')
+API_TOKEN = os.getenv('API_TOKEN')
 
-# ---------- 获取第一页数据 ----------
 def fetch_first_page():
     if not COOKIE:
-        raise Exception("环境变量 COOKIE 未设置，请在 GitHub Secrets 中配置")
+        raise Exception("环境变量 COOKIE 未设置")
     resp = requests.post(BASE_URL, headers=HEADERS, data=DATA, timeout=30)
     resp.raise_for_status()
     result = resp.json()
@@ -40,7 +37,6 @@ def fetch_first_page():
         raise Exception(f"请求失败: {result.get('msg')}")
     return result['html']
 
-# ---------- 解析 HTML ----------
 def parse_domains(html):
     soup = BeautifulSoup(html, 'html.parser')
     rows = soup.select('tbody tr')
@@ -78,22 +74,16 @@ def parse_domains(html):
         })
     return domains
 
-# ---------- 筛选、排序、取前5 ----------
 def filter_top5(domains):
     filtered = [d for d in domains if d['length'] < 20 and d['remain_days'] > 3000]
     sorted_list = sorted(filtered, key=lambda x: x['price'])
     return sorted_list[:5]
 
-# ---------- 通过微信推送接口发送 ----------
 def send_notification(results):
     if not API_TOKEN:
-        raise Exception("环境变量 API_TOKEN 未设置，请在 GitHub Secrets 中配置")
+        raise Exception("环境变量 API_TOKEN 未设置")
     if not SENDKEY:
-        raise Exception("环境变量 SENDKEY 未设置，请在 GitHub Secrets 中配置")
-
-    # 调试：打印 token 和 openid 的部分信息（安全，不泄露完整值）
-    print(f"API_TOKEN 前5位: {API_TOKEN[:5]}... (长度: {len(API_TOKEN)})")
-    print(f"SENDKEY 前5位: {SENDKEY[:5]}... (长度: {len(SENDKEY)})")
+        raise Exception("环境变量 SENDKEY 未设置")
 
     data_list = []
     for d in results:
@@ -110,28 +100,20 @@ def send_notification(results):
         "data": data_list
     }
 
-    # 与测试成功时完全一致的 headers
     push_headers = {
         "Authorization": API_TOKEN,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"
     }
 
-    print(f"推送 URL: {PUSH_URL}")
-    print(f"推送 payload: {payload}")
+    # 使用 cloudscraper 绕过 Cloudflare
+    scraper = cloudscraper.create_scraper()
+    resp = scraper.post(PUSH_URL, headers=push_headers, json=payload, timeout=30)
+    print(f"推送状态码: {resp.status_code}")
+    print(f"推送响应: {resp.text}")
+    resp.raise_for_status()
+    print("推送成功")
 
-    try:
-        resp = requests.post(PUSH_URL, headers=push_headers, json=payload, timeout=30)
-        print(f"响应状态码: {resp.status_code}")
-        print(f"响应内容: {resp.text}")
-        resp.raise_for_status()
-        result = resp.json()
-        print(f"推送成功: {result}")
-    except requests.exceptions.HTTPError as e:
-        print(f"推送失败，HTTP 错误: {e}")
-        print(f"服务器返回: {e.response.text}")
-        raise
-
-# ---------- 主流程 ----------
 def main():
     print("正在获取第一页数据...")
     html = fetch_first_page()
