@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 import os
 
 # ---------- 数据抓取配置 ----------
-BASE_URL = "https://www.juyu.com/ykj/get_list"  # 仍从原站获取域名列表
+BASE_URL = "https://www.juyu.com/ykj/get_list"
 
 # 从环境变量读取 Cookie（由 GitHub Secrets 注入）
 COOKIE = os.getenv('COOKIE')
@@ -25,8 +25,9 @@ DATA = {
 }
 
 # ---------- 微信推送配置 ----------
-PUSH_URL = "https://wxpush.gyegt614.top/domain-check"  # 新推送地址
+PUSH_URL = "https://wxpush.gyegt614.top/domain-check"
 SENDKEY = os.getenv('SENDKEY')          # 作为 openid 使用
+API_TOKEN = os.getenv('API_TOKEN')      # 用于 Authorization 头
 
 # ---------- 获取第一页数据 ----------
 def fetch_first_page():
@@ -85,6 +86,9 @@ def filter_top5(domains):
 
 # ---------- 通过微信推送接口发送 ----------
 def send_notification(results):
+    if not API_TOKEN:
+        raise Exception("环境变量 API_TOKEN 未设置，请在 GitHub Secrets 中配置")
+
     data_list = []
     for d in results:
         data_list.append({
@@ -100,7 +104,12 @@ def send_notification(results):
         "data": data_list
     }
 
-    resp = requests.post(PUSH_URL, json=payload, timeout=30)
+    # 添加 Authorization 头（Bearer 方式，若接口要求无前缀可删除 'Bearer '）
+    push_headers = {
+        'Authorization': f'Bearer {API_TOKEN}'
+    }
+
+    resp = requests.post(PUSH_URL, json=payload, headers=push_headers, timeout=30)
     resp.raise_for_status()
     result = resp.json()
     print(f"推送结果: {result}")
