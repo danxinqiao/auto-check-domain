@@ -23,7 +23,7 @@ DATA = {
     'jgpx': '3',
 }
 
-PUSH_URL = "https://wxpush.gyegt614.top/domain-check"
+PUSH_URL = "https://hpbnvpiosrzhgyxbrwpt.supabase.co/functions/v1/wx-push/domain-check"
 SENDKEY = os.getenv('SENDKEY')
 API_TOKEN = os.getenv('API_TOKEN')
 
