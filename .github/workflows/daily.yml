@@ -2,12 +2,19 @@ name: Daily Domain Monitor
 
 on:
   schedule:
-    - cron: '0 8 * * *'   # 每天北京时间 16:00
+    - cron: '0 8 * * *'   # 每天北京时间 16:00 (UTC 08:00)
   workflow_dispatch:      # 手动触发
 
 jobs:
   execute:
     runs-on: ubuntu-latest
+    # 【优化1】增加超时限制。如果程序卡死（比如网络不通、API无响应），10分钟后自动终止，防止白白耗光2000分钟额度。
+    timeout-minutes: 10 
+    
+    # 【优化2】显式声明只读权限。虽然默认通常就是只读，但显式声明是 GitHub Actions 的最佳安全实践。
+    permissions:
+      contents: read
+
     steps:
       - name: Download and Run
         env:
@@ -17,11 +24,13 @@ jobs:
           API_TOKEN: ${{ secrets.API_TOKEN }}
         run: |
           # 1. 下载最新 Release 中的二进制文件
-          # 使用 gh 工具下载，自动处理权限认证
-          gh release download --repo ${{ github.repository }} --pattern "domain-monitor" --output domain-monitor
+          echo "正在下载最新版本的 domain-monitor..."
+          # 【优化3】加上 --clobber 参数，强制覆盖同名文件（在某些 runner 缓存情况下更稳妥）
+          gh release download --repo ${{ github.repository }} --pattern "domain-monitor" --output domain-monitor --clobber
 
           # 2. 赋予执行权限
           chmod +x domain-monitor
 
           # 3. 运行程序
+          echo "开始执行监控任务..."
           ./domain-monitor

@@ -4,23 +4,34 @@ on:
   push:
     tags:
       - 'v*' # 当推送到类似 v1.0.0 的 tag 时触发
-  workflow_dispatch: # 支持在 GitHub 页面手动点击运行
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: '输入本次发布的版本号 (例如 v1.0.1)'
+        required: true
 
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+    # 【修改1】必须添加权限声明，否则无法创建 Release
+    permissions:
+      contents: write 
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 获取完整历史，以便手动触发时可以打 tag
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          # 【修改2】改为稳定版本，或填具体的现有版本如 '1.22'
+          go-version: 'stable' 
 
       - name: Build
         run: |
-          # 关键点1：固定编译为 linux/amd64 架构，因为 GitHub Actions runner 是这个架构
+          # 关键点1：固定编译为 linux/amd64 架构
           # 关键点2：CGO_ENABLED=0 确保是纯静态编译，没有外部依赖
           # 关键点3：-ldflags="-s -w" 去除调试信息，减小二进制文件体积，加快下载速度
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o domain-monitor main.go
@@ -29,5 +40,19 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # 使用内置的 gh 命令行工具，将编译好的 domain-monitor 上传到当前 tag 的 Release 中
-          gh release create ${{ github.ref_name }} domain-monitor --title "Release ${{ github.ref_name }}" --notes "Automated release for domain monitor"
+          # 【修改3】处理手动触发时的 tag 逻辑，防止把分支名当成 tag
+          if [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            # 如果是手动触发的，用输入的版本号打 tag
+            TAG_NAME="${{ github.event.inputs.tag_name }}"
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag $TAG_NAME
+            git push origin $TAG_NAME
+          else
+            # 如果是 tag 推送触发的，直接使用当前 tag
+            TAG_NAME=${{ github.ref_name }}
+          fi
+          
+          echo "准备发布版本: $TAG_NAME"
+          # 使用内置的 gh 命令行工具，将编译好的 domain-monitor 上传到 Release 中
+          gh release create $TAG_NAME domain-monitor --title "Release $TAG_NAME" --notes "Automated release for domain monitor"
