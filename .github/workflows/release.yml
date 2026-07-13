@@ -41,9 +41,9 @@ jobs:
           fi
 
           echo "准备发布版本: $TAG_NAME"
-          # --overwrite 确保重复执行不会报错
+          # 先删除已存在的 Release（忽略不存在时的错误），再重新创建
+          gh release delete "$TAG_NAME" --yes 2>/dev/null || true
           gh release create "$TAG_NAME" domain-monitor \
             --title "Release $TAG_NAME" \
             --notes "Automated release for domain monitor" \
-            --target "${{ github.sha }}" \
-            --overwrite
+            --target "${{ github.sha }}"
