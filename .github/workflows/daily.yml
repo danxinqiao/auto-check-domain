@@ -8,24 +8,29 @@ on:
 jobs:
   execute:
     runs-on: ubuntu-latest
-    # 【优化1】增加超时限制。如果程序卡死（比如网络不通、API无响应），10分钟后自动终止，防止白白耗光2000分钟额度。
-    timeout-minutes: 10 
-    
-    # 【优化2】显式声明只读权限。虽然默认通常就是只读，但显式声明是 GitHub Actions 的最佳安全实践。
+    timeout-minutes: 10
     permissions:
       contents: read
 
     steps:
+      # 缓存 Chromium 浏览器（rod 自动下载到 ~/.cache/rod/）
+      # 首次运行会下载 ~150MB，后续运行直接命中缓存，无需重复下载
+      - name: Cache Chromium for rod
+        id: cache-rod
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/rod
+          key: rod-browser-${{ runner.os }}-v1
+
       - name: Download and Run
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          COOKIE: ${{ secrets.COOKIE }}
           SENDKEY: ${{ secrets.SENDKEY }}
           API_TOKEN: ${{ secrets.API_TOKEN }}
+          # COOKIE 不再需要设置，程序自动通过浏览器自动化获取
         run: |
           # 1. 下载最新 Release 中的二进制文件
           echo "正在下载最新版本的 domain-monitor..."
-          # 【优化3】加上 --clobber 参数，强制覆盖同名文件（在某些 runner 缓存情况下更稳妥）
           gh release download --repo ${{ github.repository }} --pattern "domain-monitor" --output domain-monitor --clobber
 
           # 2. 赋予执行权限

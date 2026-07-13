@@ -77,9 +77,10 @@ func main() {
 
 // fetchFirstPage 发起列表页请求并返回响应中的 HTML 字段
 func fetchFirstPage() (string, error) {
-	cookie := os.Getenv("COOKIE")
-	if cookie == "" {
-		return "", fmt.Errorf("环境变量 COOKIE 未设置")
+	log.Println("正在通过浏览器自动化获取最新 cookie...")
+	cookie, err := fetchCookie()
+	if err != nil {
+		return "", fmt.Errorf("自动获取 cookie 失败: %w", err)
 	}
 
 	form := url.Values{}

@@ -34,7 +34,7 @@ jobs:
           # 关键点1：固定编译为 linux/amd64 架构
           # 关键点2：CGO_ENABLED=0 确保是纯静态编译，没有外部依赖
           # 关键点3：-ldflags="-s -w" 去除调试信息，减小二进制文件体积，加快下载速度
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o domain-monitor main.go
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o domain-monitor .
 
       - name: Create Release and Upload Asset
         env:
