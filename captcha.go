@@ -107,8 +107,9 @@ func fetchCookie() (string, error) {
 	mouse.MustUp(proto.InputMouseButtonLeft)
 	log.Println("滑块释放完成")
 
-	// 等待验证完成
-	time.Sleep(3 * time.Second)
+	// 等待验证完成（滑块元素消失即验证成功，最多等 10 秒）
+	log.Println("等待验证完成...")
+	page.Timeout(10 * time.Second).Wait(rod.Eval(`() => !document.querySelector('.captcha-slider__thumb')`))
 
 	// 获取 cookies
 	log.Println("验证完成，获取 cookies...")
