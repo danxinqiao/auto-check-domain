@@ -1,0 +1,23 @@
+# Binaries
+domain-monitor
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Test scripts
+*.ps1
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Dependency directories
+vendor/

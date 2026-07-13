@@ -6,23 +6,22 @@ on:
   workflow_dispatch:      # 手动触发
 
 jobs:
-  monitor:
+  execute:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Run monitor
+      - name: Download and Run
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COOKIE: ${{ secrets.COOKIE }}
           SENDKEY: ${{ secrets.SENDKEY }}
           API_TOKEN: ${{ secrets.API_TOKEN }}
-        run: python domain_monitor.py
+        run: |
+          # 1. 下载最新 Release 中的二进制文件
+          # 使用 gh 工具下载，自动处理权限认证
+          gh release download --repo ${{ github.repository }} --pattern "domain-monitor" --output domain-monitor
+
+          # 2. 赋予执行权限
+          chmod +x domain-monitor
+
+          # 3. 运行程序
+          ./domain-monitor
