@@ -82,7 +82,20 @@ func fetchFirstPage() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("自动获取 cookie 失败: %w", err)
 	}
+	fr, err := getPageInfo(cookie)
+	if fr.Code == -429 {
+		log.Println("请求过于频繁，等待5秒")
+		time.Sleep(time.Second * 5)
+		fr, err = getPageInfo(cookie)
+	}
+	if fr.Code != 1 {
+		return "", fmt.Errorf("请求失败: %s", fr.Msg)
+	}
+	return fr.HTML, nil
+}
 
+// 获取网页对应的信息
+func getPageInfo(cookie string) (*FetchResponse, error) {
 	form := url.Values{}
 	form.Set("dqsj_1", "3000")
 	form.Set("psize", "50")
@@ -91,7 +104,7 @@ func fetchFirstPage() (string, error) {
 
 	req, err := http.NewRequest("POST", baseURL, strings.NewReader(form.Encode()))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Cookie", cookie)
@@ -103,27 +116,24 @@ func fetchFirstPage() (string, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("请求失败，状态码: %d", resp.StatusCode)
+		return nil, fmt.Errorf("请求失败，状态码: %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	var fr FetchResponse
 	if err := json.Unmarshal(body, &fr); err != nil {
-		return "", fmt.Errorf("解析JSON失败: %w", err)
+		return nil, fmt.Errorf("解析JSON失败: %w", err)
 	}
-	if fr.Code != 1 {
-		return "", fmt.Errorf("请求失败: %s", fr.Msg)
-	}
-	return fr.HTML, nil
+	return &fr, nil
 }
 
 // parseDomains 从 HTML 中解析域名信息

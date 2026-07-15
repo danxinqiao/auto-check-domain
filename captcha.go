@@ -68,10 +68,10 @@ func fetchCookie() (string, error) {
 	shape := thumb.MustShape()
 	box := shape.Box()
 
-	// 计算滑动距离（滑轨总宽 330px - 滑块宽度）
-	const trackWidth = 330.0
+	// 动态获取滑轨实际宽度（thumb 的父元素即为滑轨）
+	trackWidth := page.MustEval(`() => document.querySelector('.captcha-slider__thumb').parentElement.getBoundingClientRect().width`).Num()
 	distance := trackWidth - box.Width
-	log.Printf("滑动距离: %.2fpx（滑轨 %.0fpx - 滑块 %.2fpx）", distance, trackWidth, box.Width)
+	log.Printf("滑动距离: %.2fpx（滑轨 %.2fpx - 滑块 %.2fpx）", distance, trackWidth, box.Width)
 
 	// 滑块起始位置中心点
 	startX := box.X + box.Width/2

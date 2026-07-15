@@ -12,6 +12,8 @@ domain-monitor
 # Test scripts
 *.ps1
 
+.vscode
+
 # Output of the go coverage tool
 *.out
 
