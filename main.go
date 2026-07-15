@@ -7,13 +7,14 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/go-rod/rod"
 )
 
 const (
@@ -54,6 +55,7 @@ type FetchResponse struct {
 }
 
 func main() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	log.Println("正在获取第一页数据...")
 	html, err := fetchFirstPage()
 	if err != nil {
@@ -75,65 +77,93 @@ func main() {
 	log.Println("推送完成")
 }
 
-// fetchFirstPage 发起列表页请求并返回响应中的 HTML 字段
+// fetchFirstPage 启动浏览器，通过验证码后获取列表页 HTML。
+// 流程：通过验证码建立会话 → 用浏览器 fetch 发起 get_list 请求 → 拦截响应；
+// 所有请求都通过浏览器原生网络栈发出，自动携带 cookie，不会被反爬识别。
+// 若返回 -401（验证码 cookie 尚未生效），等待后重试即可。
 func fetchFirstPage() (string, error) {
-	log.Println("正在通过浏览器自动化获取最新 cookie...")
-	cookie, err := fetchCookie()
+	log.Println("正在启动浏览器...")
+	browser, page, err := openBrowser()
 	if err != nil {
-		return "", fmt.Errorf("自动获取 cookie 失败: %w", err)
+		return "", fmt.Errorf("启动浏览器失败: %w", err)
 	}
-	fr, err := getPageInfo(cookie)
+	defer browser.MustClose()
+
+	// 首次通过验证码
+	log.Println("首次通过验证码建立会话...")
+	solveCaptcha(page)
+
+	fr, err := getPageInfo(page)
+	if err != nil {
+		return "", err
+	}
+
+	// -401: 验证码 cookie 可能尚未生效，等待后重试
+	if fr.Code == -401 {
+		log.Printf("返回 -401，等待2秒后重试: %s", fr.Msg)
+		time.Sleep(time.Second * 2)
+		fr, err = getPageInfo(page)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	// 请求过于频繁，等待后重试
 	if fr.Code == -429 {
-		log.Println("请求过于频繁，等待5秒")
+		log.Printf("请求过于频繁，等待5秒后重试: %s", fr.Msg)
 		time.Sleep(time.Second * 5)
-		fr, err = getPageInfo(cookie)
+		fr, err = getPageInfo(page)
+		if err != nil {
+			return "", err
+		}
 	}
+
 	if fr.Code != 1 {
 		return "", fmt.Errorf("请求失败: %s", fr.Msg)
 	}
 	return fr.HTML, nil
 }
 
-// 获取网页对应的信息
-func getPageInfo(cookie string) (*FetchResponse, error) {
-	form := url.Values{}
-	form.Set("dqsj_1", "3000")
-	form.Set("psize", "50")
-	form.Set("page", "1")
-	form.Set("jgpx", "3")
+// getPageInfo 在浏览器中通过 fetch API 发起列表请求并返回解析后的结果。
+// 请求通过浏览器原生网络栈发出，自动携带 cookie，无需手动拼接。
+func getPageInfo(page *rod.Page) (*FetchResponse, error) {
+	js := `async () => {
+		const form = new URLSearchParams();
+		form.set('dqsj_1', '3000');
+		form.set('psize', '50');
+		form.set('page', '1');
+		form.set('jgpx', '3');
+		const resp = await fetch('` + baseURL + `', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/x-www-form-urlencoded',
+				'X-Requested-With': 'XMLHttpRequest'
+			},
+			body: form.toString()
+		});
+		return await resp.text();
+	}`
 
-	req, err := http.NewRequest("POST", baseURL, strings.NewReader(form.Encode()))
+	res, err := page.Eval(js)
 	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Cookie", cookie)
-	req.Header.Set("Origin", "https://www.juyu.com")
-	req.Header.Set("Referer", "https://www.juyu.com/ykj/")
-	req.Header.Set("User-Agent", userAgent)
-	req.Header.Set("X-Requested-With", "XMLHttpRequest")
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("请求失败，状态码: %d", resp.StatusCode)
+		return nil, fmt.Errorf("浏览器请求失败: %w", err)
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
+	body := res.Value.Str()
+	log.Printf("getPageInfo 响应: %s", body[:min(len(body), 300)])
 
 	var fr FetchResponse
-	if err := json.Unmarshal(body, &fr); err != nil {
+	if err := json.Unmarshal([]byte(body), &fr); err != nil {
 		return nil, fmt.Errorf("解析JSON失败: %w", err)
 	}
 	return &fr, nil
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // parseDomains 从 HTML 中解析域名信息

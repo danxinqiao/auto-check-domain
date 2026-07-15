@@ -5,7 +5,6 @@ import (
 	"log"
 	"math"
 	"math/rand"
-	"strings"
 	"time"
 
 	"github.com/go-rod/rod"
@@ -13,11 +12,11 @@ import (
 	"github.com/go-rod/rod/lib/proto"
 )
 
-// fetchCookie 使用浏览器自动化滑动验证码获取 cookie
-func fetchCookie() (string, error) {
-	log.Println("使用浏览器自动化获取 cookie...")
+// openBrowser 启动浏览器并导航到一口价页面，返回浏览器和页面实例。
+// 调用方负责在不再使用时关闭浏览器。
+func openBrowser() (*rod.Browser, *rod.Page, error) {
+	log.Println("启动浏览器（headless 无头模式）...")
 
-	// 启动浏览器（headless 无头模式）
 	u := launcher.New().
 		Headless(true).
 		Set("no-sandbox").
@@ -25,7 +24,6 @@ func fetchCookie() (string, error) {
 		MustLaunch()
 
 	browser := rod.New().ControlURL(u).MustConnect()
-	defer browser.MustClose()
 
 	// 先创建空白页注入反检测脚本，再导航到目标页面
 	page := browser.MustPage("")
@@ -40,15 +38,21 @@ func fetchCookie() (string, error) {
 	}.Call(page)
 
 	log.Println("访问一口价页面 https://www.juyu.com/ykj/ ...")
-	err := page.Navigate("https://www.juyu.com/ykj/")
-	if err != nil {
-		return "", fmt.Errorf("导航失败: %w", err)
+	if err := page.Navigate("https://www.juyu.com/ykj/"); err != nil {
+		browser.MustClose()
+		return nil, nil, fmt.Errorf("导航失败: %w", err)
 	}
 	page.MustWaitLoad()
 
 	title := page.MustInfo().Title
 	log.Printf("一口价页面加载完成，标题: %s", title)
 
+	return browser, page, nil
+}
+
+// solveCaptcha 点击搜索按钮触发验证并完成滑块滑动验证。
+// 内部使用 Must* 系列方法，失败时会 panic（与既有验证流程一致）。
+func solveCaptcha(page *rod.Page) {
 	// 等待搜索按钮渲染完成（MustElement 自动等待元素出现）
 	log.Println("等待搜索按钮渲染...")
 	page.MustElement("button#cha")
@@ -110,24 +114,7 @@ func fetchCookie() (string, error) {
 	// 等待验证完成（滑块元素消失即验证成功，最多等 10 秒）
 	log.Println("等待验证完成...")
 	page.Timeout(10 * time.Second).Wait(rod.Eval(`() => !document.querySelector('.captcha-slider__thumb')`))
-
-	// 获取 cookies
-	log.Println("验证完成，获取 cookies...")
-	cookies, err := browser.GetCookies()
-	if err != nil {
-		return "", fmt.Errorf("获取 cookie 失败: %w", err)
-	}
-	log.Printf("获取到 %d 个 cookie", len(cookies))
-
-	// 拼接 cookie 字符串
-	parts := make([]string, 0, len(cookies))
-	for _, c := range cookies {
-		parts = append(parts, fmt.Sprintf("%s=%s", c.Name, c.Value))
-	}
-	cookieStr := strings.Join(parts, "; ")
-	log.Printf("Cookie: %s", cookieStr)
-
-	return cookieStr, nil
+	log.Println("验证完成")
 }
 
 // randomSleep 随机休眠指定范围（毫秒）
